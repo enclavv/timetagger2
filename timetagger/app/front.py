@@ -174,6 +174,7 @@ class TimeTaggerCanvas(BaseCanvas):
         self.report_dialog = dialogs.ReportDialog(self)
         self.tag_preset_dialog = dialogs.TagPresetsDialog(self)
         self.tag_rename_dialog = dialogs.TagRenameDialog(self)
+        self.confirm_drafts_dialog = dialogs.ConfirmDraftsDialog(self)
         self.search_dialog = dialogs.SearchDialog(self)
         self.export_dialog = dialogs.ExportDialog(self)
         self.import_dialog = dialogs.ImportDialog(self)
@@ -1128,6 +1129,22 @@ class TopWidget(Widget):
         )
         x += margin
 
+        t1, t2 = self._canvas.range.get_range()
+        n_drafts = len(dialogs.draft_records(t1, t2))
+        if n_drafts > 0:
+            x += self._draw_button(
+                ctx,
+                x,
+                y3,
+                None,
+                h,
+                ["fas-\uf00c", f"Confirm {n_drafts}" if avail_width > 560 else ""],
+                "confirm_drafts",
+                "Confirm the drafts in view [c]",
+                {"ref": "topleft", "font": FONT.condensed},
+            )
+            x += margin
+
         x += self._draw_button(
             ctx,
             x,
@@ -1549,6 +1566,8 @@ class TopWidget(Widget):
             self._handle_button_press("report")
         elif e.key.lower() == "i":
             self._handle_button_press("guide")
+        elif e.key.lower() == "c":
+            self._handle_button_press("confirm_drafts")
         else:
             return
 
@@ -1588,6 +1607,10 @@ class TopWidget(Widget):
 
         elif action == "guide":
             self._canvas.guide_dialog.open()
+
+        elif action == "confirm_drafts":
+            t1, t2 = self._canvas.range.get_range()
+            self._canvas.confirm_drafts_dialog.open(t1, t2, self.update)
 
         elif action == "pomo":
             self._canvas.pomodoro_dialog.open()

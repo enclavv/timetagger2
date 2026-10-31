@@ -2556,6 +2556,96 @@ class TagRenameDialog(BaseDialog):
         window.setTimeout(self._hide_confirm_button, 500)
 
 
+DRAFT_TAG = "#draft"
+
+
+def draft_records(t1, t2):
+    """The finished records in t1-t2 that carry the #draft tag (copies), oldest first."""
+    records = []
+    for record in window.store.records.get_records(t1, t2).values():
+        if record.t1 == record.t2:
+            continue  # a running record is not done yet
+        if DRAFT_TAG in window.store.records.tags_from_record(record):
+            records.push(record)
+    records.sort(key=lambda r: r.t1)
+    return records
+
+
+def without_draft_tag(ds):
+    """The record text with the #draft tag taken out, the rest as it was."""
+    _, parts = utils.get_tags_and_parts_from_string(ds)
+    new_parts = []
+    for part in parts:
+        if part.lower() != DRAFT_TAG:
+            new_parts.push(part)
+    text = "".join(new_parts)
+    while "  " in text:
+        text = text.replace("  ", " ")
+    return text.strip()
+
+
+class ConfirmDraftsDialog(BaseDialog):
+    """Dialog to confirm, in one step, every #draft record in view: the #draft tag
+    is removed from each and the rest of its text is kept. Records that were
+    drafted by an outside tool (an automatic tracker) and checked here by eye.
+    """
+
+    EXIT_ON_CLICK_OUTSIDE = True
+
+    def open(self, t1, t2, callback=None):
+        self._records = draft_records(t1, t2)
+        n = len(self._records)
+        secs = 0
+        for record in self._records:
+            secs += record.t2 - record.t1
+        duration = dt.duration_string(secs, False)
+        word = "record" if n == 1 else "records"
+
+        self.maindiv.innerHTML = f"""
+            <h1><i class='fas'>\uf00c</i>&nbsp;&nbsp;Confirm drafts
+                <button type='button'><i class='fas'>\uf00d</i></button>
+                </h1>
+            <p>{n} draft {word} in view ({duration}).
+            Confirming removes <b>{DRAFT_TAG}</b> from each and keeps its other tags,
+            so fix the ones that are wrong first.</p>
+            <div style='margin-top:2em;'></div>
+            <div style='display: flex;justify-content: flex-end;'>
+                <button type='button' class='actionbutton'><i class='fas'>\uf00d</i>&nbsp;&nbsp;Cancel</button>
+                <button type='button' class='actionbutton submit'><i class='fas'>\uf00c</i>&nbsp;&nbsp;Confirm {n}</button>
+            </div>
+        """
+
+        close_but = self.maindiv.children[0].children[-1]
+        close_but.onclick = self.close
+        buttons = self.maindiv.children[-1]
+        buttons.children[0].onclick = self.close
+        self._confirm_but = buttons.children[1]
+        self._confirm_but.onclick = self._confirm
+        self._confirm_but.disabled = n == 0
+        super().open(callback)
+
+    def _confirm(self):
+        records = []
+        for record in self._records:
+            current = window.store.records.get_by_key(record.key)
+            if current is None or current.t1 == current.t2:
+                continue
+            current.ds = without_draft_tag(current.get("ds", ""))
+            records.push(current)
+        if records:
+            window.store.records.put(*records)
+        self.submit()
+
+    def _on_key(self, e):
+        key = e.key.lower()
+        if key == "enter" or key == "return":
+            e.preventDefault()
+            if not self._confirm_but.disabled:
+                self._confirm()
+        else:
+            super()._on_key(e)
+
+
 class SearchDialog(BaseDialog):
     """Dialog to search for records and tags."""
 
